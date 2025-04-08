@@ -27,8 +27,8 @@ import argparse
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QLabel, QPushButton, 
                             QVBoxLayout, QHBoxLayout, QWidget, QTextEdit, 
                             QSystemTrayIcon, QMenu, QAction, QStyle, QSizePolicy)
-from PyQt5.QtCore import Qt, QThread, pyqtSignal, QSize, QPoint, QRect
-from PyQt5.QtGui import QPixmap, QImage, QIcon, QCursor, QPalette
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QSize, QPoint, QRect, QDateTime
+from PyQt5.QtGui import QPixmap, QImage, QIcon, QCursor, QPalette, QTextCursor
 
 from pynput import keyboard
 
@@ -91,6 +91,7 @@ current_keys = set()
 
 class GeminiWorker(QThread):
     text_update = pyqtSignal(str)
+    new_message = pyqtSignal()  # New signal to indicate a new message/response is starting
     frame_update = pyqtSignal(QImage)
     
     def __init__(self, video_mode=DEFAULT_MODE):
@@ -276,6 +277,9 @@ class GeminiWorker(QThread):
     async def receive_audio(self):
         while self.running:
             turn = self.session.receive()
+            # Signal that a new message is starting
+            self.new_message.emit()
+            
             async for response in turn:
                 if data := response.data:
                     self.audio_in_queue.put_nowait(data)
@@ -437,7 +441,7 @@ class CompactGeminiAppWindow(QMainWindow):
         chat_label.setAlignment(Qt.AlignLeft)
         right_column.addWidget(chat_label)
         
-        # Text output area with improved styling
+        # Text output area with improved styling for conversations
         self.response_text = QTextEdit()
         self.response_text.setReadOnly(True)
         self.response_text.setMinimumHeight(220)
@@ -472,8 +476,12 @@ class CompactGeminiAppWindow(QMainWindow):
         # Initialize Gemini worker
         self.worker = GeminiWorker(video_mode="camera")
         self.worker.text_update.connect(self.update_response)
+        self.worker.new_message.connect(self.prepare_new_message)
         self.worker.frame_update.connect(self.update_frame)
         self.worker.start()
+        
+        # Add a flag to track if this is a new message
+        self.is_new_message = True
         
         # Setup system tray
         self.setup_tray()
@@ -481,7 +489,7 @@ class CompactGeminiAppWindow(QMainWindow):
         
         # Update UI state
         self.update_ui_listening_state(False)
-    
+
     def detect_dark_mode(self):
         """Detect if the system is using dark mode"""
         if sys.platform == "darwin":  # macOS specific
@@ -499,14 +507,14 @@ class CompactGeminiAppWindow(QMainWindow):
         palette = app.palette()
         bg_color = palette.color(QPalette.Window)
         return bg_color.lightness() < 128  # If background is dark, assume dark mode
-    
+
     def apply_theme(self, widget):
         """Apply the appropriate theme based on system settings"""
         if self.is_dark_mode:
             self.apply_dark_theme(widget)
         else:
             self.apply_light_theme(widget)
-    
+
     def apply_dark_theme(self, widget):
         """Apply dark theme styles"""
         widget.setStyleSheet("""
@@ -526,6 +534,7 @@ class CompactGeminiAppWindow(QMainWindow):
                 font-size: 14px;
                 selection-background-color: rgba(70, 130, 180, 0.5);
                 border: 1px solid rgba(70, 70, 120, 0.5);
+                line-height: 1.4;
             }
             QPushButton {
                 background-color: rgba(90, 120, 200, 0.8);
@@ -573,7 +582,7 @@ class CompactGeminiAppWindow(QMainWindow):
                 background-color: rgba(230, 80, 80, 0.9);
             }
         """
-    
+
     def apply_light_theme(self, widget):
         """Apply light theme styles"""
         widget.setStyleSheet("""
@@ -593,6 +602,7 @@ class CompactGeminiAppWindow(QMainWindow):
                 font-size: 14px;
                 selection-background-color: rgba(70, 130, 180, 0.3);
                 border: 1px solid rgba(180, 180, 210, 0.5);
+                line-height: 1.4;
             }
             QPushButton {
                 background-color: rgba(70, 120, 200, 0.8);
@@ -642,10 +652,9 @@ class CompactGeminiAppWindow(QMainWindow):
                 background-color: rgba(230, 80, 80, 0.9);
             }
         """
-    
+
     def setup_tray(self):
         self.tray_icon = QSystemTrayIcon(self)
-        
         # Try to get a better icon - using a speech bubble icon if available
         icon = QApplication.style().standardIcon(QStyle.SP_MessageBoxInformation)
         self.tray_icon.setIcon(icon)
@@ -709,7 +718,7 @@ class CompactGeminiAppWindow(QMainWindow):
             QSystemTrayIcon.Information,
             2000
         )
-    
+
     def on_tray_icon_activated(self, reason):
         """Handle activation of the tray icon"""
         if reason == QSystemTrayIcon.Trigger:  # Click on the icon
@@ -717,7 +726,7 @@ class CompactGeminiAppWindow(QMainWindow):
                 self.hide_and_stop_listening()
             else:
                 self.force_show_window()
-    
+
     def toggle_theme(self):
         """Toggle between light and dark themes"""
         self.is_dark_mode = not self.is_dark_mode
@@ -727,10 +736,10 @@ class CompactGeminiAppWindow(QMainWindow):
         # Update close button style
         if hasattr(self, 'close_button'):
             self.close_button.setStyleSheet(self.close_button_style)
-            
+        
         # Update indicator colors based on the current listening state
         self.update_ui_listening_state(self.worker.listening)
-    
+
     def center_on_screen(self):
         screen_geometry = QApplication.desktop().availableGeometry()
         x = (screen_geometry.width() - self.width()) // 2
@@ -750,14 +759,14 @@ class CompactGeminiAppWindow(QMainWindow):
         self.worker.listening = True
         self.update_ui_listening_state(True)
         self.response_text.clear()
-    
+        
     def hide_and_stop_listening(self):
         self.hide()
         # Stop both listening and hardware access
         self.worker.listening = False
         self.worker.deactivate_hardware()
         self.update_ui_listening_state(False)
-    
+
     def toggle_listening(self, checked):
         if checked:
             self.worker.listening = True
@@ -766,7 +775,7 @@ class CompactGeminiAppWindow(QMainWindow):
         else:
             self.worker.listening = False
             self.update_ui_listening_state(False)
-    
+
     def update_ui_listening_state(self, is_listening):
         """Update UI elements to reflect listening state"""
         if is_listening:
@@ -783,17 +792,32 @@ class CompactGeminiAppWindow(QMainWindow):
                 background-color: #ff4040;
                 border-radius: 5px;
             """)
-    
+
+    def prepare_new_message(self):
+        """Prepare the text area for a new message from Gemini"""
+        self.is_new_message = True
+        # If there's already text, add two newlines to separate messages clearly
+        if self.response_text.toPlainText().strip():
+            cursor = self.response_text.textCursor()
+            cursor.movePosition(cursor.End)
+            self.response_text.setTextCursor(cursor)
+            self.response_text.insertHtml("<br><br>")
+
     def update_response(self, text):
         """Update the response text with formatting"""
-        current_text = self.response_text.toPlainText()
-        
-        # If empty, start with a Gemini label with theme-appropriate color
-        if not current_text:
+        # If it's a new message, add the Gemini label
+        if self.is_new_message:
+            self.is_new_message = False
             color = "#a0a0ff" if self.is_dark_mode else "#3040a0"
-            self.response_text.setHtml(f"<b style='color:{color};'>Gemini:</b> " + text)
+            timestamp = QDateTime.currentDateTime().toString("hh:mm:ss")
+            self.response_text.insertHtml(
+                f'<div style="margin-top:10px;">'
+                f'<span style="color:{color}; font-weight:bold;">Gemini</span> '
+                f'<span style="color:#888888; font-size:11px;">({timestamp})</span>:<br>'
+                f'{text}</div>'
+            )
         else:
-            # Otherwise just append
+            # Continue the existing message
             cursor = self.response_text.textCursor()
             cursor.movePosition(cursor.End)
             self.response_text.setTextCursor(cursor)
@@ -803,7 +827,7 @@ class CompactGeminiAppWindow(QMainWindow):
         self.response_text.verticalScrollBar().setValue(
             self.response_text.verticalScrollBar().maximum()
         )
-    
+
     def update_frame(self, image):
         pixmap = QPixmap.fromImage(image)
         scaled_pixmap = pixmap.scaled(
@@ -813,32 +837,32 @@ class CompactGeminiAppWindow(QMainWindow):
             Qt.SmoothTransformation
         )
         self.video_label.setPixmap(scaled_pixmap)
-    
+
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
             self.old_pos = event.globalPos()
-    
+            
     def mouseMoveEvent(self, event):
         if event.buttons() & Qt.LeftButton:
             delta = QPoint(event.globalPos() - self.old_pos)
             self.move(self.x() + delta.x(), self.y() + delta.y())
             self.old_pos = event.globalPos()
-    
+
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Escape:
             self.hide_and_stop_listening()
         super().keyPressEvent(event)
-    
+
     def showEvent(self, event):
         """Called when window is shown"""
         self.worker.activate_hardware()
         super().showEvent(event)
-    
+
     def hideEvent(self, event):
         """Called when window is hidden"""
         self.worker.deactivate_hardware()
         super().hideEvent(event)
-    
+
     def closeEvent(self, event):
         # Just hide instead of close when the X is clicked
         if self.tray_icon.isVisible():
@@ -847,11 +871,10 @@ class CompactGeminiAppWindow(QMainWindow):
         else:
             self.quit_app()
             event.accept()
-    
+
     def quit_app(self):
         self.worker.stop()
         QApplication.quit()
-
 
 def on_press(key):
     try:
@@ -864,13 +887,12 @@ def on_press(key):
                 window.force_show_window()
     except:
         pass
-        
+
 def on_release(key):
     try:
         current_keys.discard(key)
     except:
         pass
-
 
 if __name__ == "__main__":
     # Set Qt attributes before creating QApplication
@@ -882,41 +904,45 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)  # Keep running when window is closed
     
-    # For macOS: Hide the dock icon properly using PyObjC
-    if sys.platform == "darwin":
-        try:
-            # Try PyObjC approach
-            from Foundation import NSBundle
-            info = NSBundle.mainBundle().infoDictionary()
-            info["LSBackgroundOnly"] = "1"
-            
-            # Additional approach - more radical
-            import objc
-            from AppKit import NSApplication
-            NSApplication.sharedApplication().setActivationPolicy_(1)  # NSApplicationActivationPolicyAccessory
-        except ImportError:
-            # If PyObjC is not available, we already used Qt approach as fallback
-            pass
-    
-    # Check API key
-    if not GEMINI_API_KEY:
-        from PyQt5.QtWidgets import QInputDialog
-        GEMINI_API_KEY, ok = QInputDialog.getText(
-            None, 
-            "Gemini API Key", 
-            "Enter your Gemini API Key:", 
-            echo=QInputDialog.Password
-        )
-        if not ok or not GEMINI_API_KEY:
-            sys.exit(1)
-        client = genai.Client(http_options={"api_version": "v1alpha"}, api_key=GEMINI_API_KEY)
-    
-    # Create main window
-    window = CompactGeminiAppWindow()
-    
-    # Setup global hotkey listener
-    listener = keyboard.Listener(on_press=on_press, on_release=on_release)
-    listener.start()
-    
-    # Start event loop
-    sys.exit(app.exec_())
+    try:
+        # For macOS: Hide the dock icon properly using PyObjC
+        if sys.platform == "darwin":
+            try:
+                # Try PyObjC approach:
+                from Foundation import NSBundle
+                info = NSBundle.mainBundle().infoDictionary()
+                info["LSBackgroundOnly"] = "1"
+                
+                # Additional approach - more radical
+                import objc
+                from AppKit import NSApplication
+                NSApplication.sharedApplication().setActivationPolicy_(1)  # NSApplicationActivationPolicyAccessory
+            except ImportError:
+                # If PyObjC is not available, we already used Qt approach as fallback
+                pass
+        
+        # Check API key
+        if not GEMINI_API_KEY:
+            from PyQt5.QtWidgets import QInputDialog
+            GEMINI_API_KEY, ok = QInputDialog.getText(
+                None, 
+                "Gemini API Key", 
+                "Enter your Gemini API Key:", 
+                echo=QInputDialog.Password
+            )
+            if not ok or not GEMINI_API_KEY:
+                sys.exit(1)
+            client = genai.Client(http_options={"api_version": "v1alpha"}, api_key=GEMINI_API_KEY)
+        
+        # Create main window
+        window = CompactGeminiAppWindow()
+        
+        # Setup global hotkey listener
+        listener = keyboard.Listener(on_press=on_press, on_release=on_release)
+        listener.start()
+        
+        # Start event loop
+        sys.exit(app.exec_())
+    except Exception as e:
+        print(f"Error: {e}")
+        sys.exit(1)
