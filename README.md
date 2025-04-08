@@ -1,6 +1,7 @@
 # Gemini Assistant macOS App
 
 A native macOS application that connects to Google's Gemini AI. The app automatically accesses your camera and microphone to provide a seamless AI assistant experience.
+![image](https://github.com/user-attachments/assets/8fa117b0-f19a-4aca-a684-619789f2af1d)
 
 ## Features
 
@@ -29,15 +30,6 @@ A native macOS application that connects to Google's Gemini AI. The app automati
    ```
    If not set as an environment variable, the app will ask for it on startup.
 
-### Building the App
-
-To build a standalone macOS app:
-
-```
-python setup.py py2app
-```
-
-This will create a standalone app in the `dist` folder.
 
 ### Running Without Building
 
