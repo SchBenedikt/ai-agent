@@ -19,46 +19,46 @@ from env_manager import save_api_key, load_env_variables
 from config import client
 
 class SettingsDialog(QDialog):
-    """Einstellungsdialog zur Konfiguration des API-Keys"""
+    """Settings dialog for configuring the API key"""
     
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Gemini Einstellungen")
+        self.setWindowTitle("Gemini Settings")
         self.setMinimumWidth(400)
         
-        # Layout erstellen
+        # Create layout
         self.layout = QVBoxLayout()
         self.setLayout(self.layout)
         
-        # Formular für die Einstellungen
+        # Settings form
         form_layout = QFormLayout()
         
-        # API Key Eingabefeld
+        # API key input field
         self.api_key_input = QLineEdit()
-        # Passwort-Modus für den API-Key verwenden
+        # Use password mode for the API key
         self.api_key_input.setEchoMode(QLineEdit.Password)
         self.api_key_input.setMinimumWidth(300)
         
-        # Aktuelle Werte laden
+        # Load current values
         env_vars = load_env_variables()
         self.api_key_input.setText(env_vars.get('api_key', ''))
         
         form_layout.addRow("Gemini API Key:", self.api_key_input)
         self.layout.addLayout(form_layout)
         
-        # Info-Text
-        info_label = QLabel("Der API Key wird lokal in einer .env-Datei gespeichert.")
+        # Info text
+        info_label = QLabel("The API key is stored locally in a .env file.")
         info_label.setWordWrap(True)
         self.layout.addWidget(info_label)
         
-        # Buttons (OK/Abbrechen)
+        # Buttons (OK/Cancel)
         button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         button_box.accepted.connect(self.accept)
         button_box.rejected.connect(self.reject)
         self.layout.addWidget(button_box)
     
     def get_api_key(self):
-        """Gibt den eingegebenen API-Key zurück"""
+        """Returns the entered API key"""
         return self.api_key_input.text().strip()
 
 class CompactGeminiAppWindow(QMainWindow):
@@ -75,7 +75,7 @@ class CompactGeminiAppWindow(QMainWindow):
         # Set initial size - compact overlay
         self.setGeometry(0, 0, 380, 480)
         
-        # Detect dark mode or light mode from system
+        # Detect dark mode or light mode from the system
         self.is_dark_mode = self.detect_dark_mode()
         
         # Create main widget with rounded corners and background
@@ -234,7 +234,7 @@ class CompactGeminiAppWindow(QMainWindow):
         # Store initial position for dragging
         self.old_pos = self.pos()
         
-        # Initialize Gemini worker with current API-Key
+        # Initialize Gemini worker with the current API key
         env_vars = load_env_variables()
         api_key = env_vars.get('api_key', '')
         self.worker = GeminiWorker(video_mode="camera", api_key=api_key)
@@ -242,10 +242,10 @@ class CompactGeminiAppWindow(QMainWindow):
         self.worker.new_message.connect(self.prepare_new_message)
         self.worker.frame_update.connect(self.update_frame)
         self.worker.response_complete.connect(self.speak_response)
-        self.worker.api_key_required.connect(self.show_settings)  # Verbinde das neue Signal
+        self.worker.api_key_required.connect(self.show_settings)  # Connect the new signal
         self.worker.start()
         
-        # Add a flag to track if this is a new message
+        # Flag to track if this is a new message
         self.is_new_message = True
         
         # Setup system tray
@@ -258,28 +258,28 @@ class CompactGeminiAppWindow(QMainWindow):
         # Remove always-on-top functionality
         # The timer and ensure_on_top method are no longer needed
         
-        # Prüfen, ob ein API-Key vorhanden ist
+        # Check if an API key is present
         env_vars = load_env_variables()
         if not env_vars.get('api_key'):
-            # Bei fehlendem API-Key direkt die Einstellungen anzeigen
+            # If no API key, show settings directly
             self.show_settings()
 
     def show_settings(self):
-        """Zeigt den Einstellungsdialog an"""
+        """Shows the settings dialog"""
         dialog = SettingsDialog(self)
         if dialog.exec_():
-            # Wenn OK gedrückt wurde, API-Key speichern
+            # If OK is pressed, save the API key
             api_key = dialog.get_api_key()
             if api_key:
                 save_api_key(api_key)
-                # API-Key im Worker aktualisieren
+                # Update API key in the worker
                 self.worker.update_api_key(api_key)
-                # Erfolgsmeldung anzeigen
-                self.status_label.setText("API Key gespeichert")
-                # Nach 3 Sekunden wieder auf "Ready" zurücksetzen
+                # Display success message
+                self.status_label.setText("API key saved")
+                # Reset to "Ready" after 3 seconds
                 QTimer.singleShot(3000, lambda: self.status_label.setText("Ready"))
             else:
-                self.status_label.setText("Kein API Key")
+                self.status_label.setText("No API key")
 
     def setup_tray(self):
         self.tray_icon = QSystemTrayIcon(self)
@@ -289,10 +289,10 @@ class CompactGeminiAppWindow(QMainWindow):
         
         # Create context menu for the tray icon
         tray_menu = QMenu()
-        settings_action = tray_menu.addAction("Einstellungen")
+        settings_action = tray_menu.addAction("Settings")
         settings_action.triggered.connect(self.show_settings)
         tray_menu.addSeparator()
-        quit_action = tray_menu.addAction("Beenden")
+        quit_action = tray_menu.addAction("Quit")
         quit_action.triggered.connect(self.quit_app)
         self.tray_icon.setContextMenu(tray_menu)
         
@@ -388,7 +388,7 @@ class CompactGeminiAppWindow(QMainWindow):
             }
         """)
         
-        # Update close button color for dark mode
+        # Update close button style for dark mode
         self.close_button_style = """
             QPushButton {
                 background-color: rgba(200, 70, 70, 0.8);
@@ -457,7 +457,7 @@ class CompactGeminiAppWindow(QMainWindow):
             }
         """)
         
-        # Update close button color for light mode
+        # Update close button style for light mode
         self.close_button_style = """
             QPushButton {
                 background-color: rgba(200, 70, 70, 0.8);
@@ -479,7 +479,7 @@ class CompactGeminiAppWindow(QMainWindow):
         self.move(x, y)
     
     def force_show_window(self):
-        """More aggressive method to ensure window appears"""
+        """More aggressive method to ensure the window appears"""
         self.setVisible(True)  # Make sure it's visible
         self.show()  # Standard show
         self.showNormal()  # Ensure it's not minimized
@@ -497,7 +497,7 @@ class CompactGeminiAppWindow(QMainWindow):
         self.activate_hardware_and_listen()
         
     def activate_hardware_and_listen(self):
-        """Start hardware and listening separately from showing window"""
+        """Start hardware and listening separately from showing the window"""
         # Start hardware and listening
         self.worker.activate_hardware()
         self.worker.listening = True
@@ -521,7 +521,7 @@ class CompactGeminiAppWindow(QMainWindow):
             self.update_ui_listening_state(False)
 
     def update_ui_listening_state(self, is_listening):
-        """Update UI elements to reflect listening state"""
+        """Update UI elements to reflect the listening state"""
         if is_listening:
             self.ask_button.setText("Listening...")
             self.status_label.setText("Active")
@@ -584,10 +584,10 @@ class CompactGeminiAppWindow(QMainWindow):
 
     def speak_response(self, response):
         """
-        Diese Methode wurde deaktiviert, da die Sprachausgabe entfernt wurde.
-        Sie bleibt als leere Methode erhalten, um mit dem Signal response_complete kompatibel zu sein.
+        This method has been disabled, as text-to-speech has been removed.
+        It remains as an empty method to be compatible with the signal response_complete.
         """
-        # Sprachausgabe deaktiviert
+        # Text-to-speech disabled
         pass
 
     def mousePressEvent(self, event):
@@ -606,17 +606,17 @@ class CompactGeminiAppWindow(QMainWindow):
         super().keyPressEvent(event)
 
     def showEvent(self, event):
-        """Called when window is shown"""
+        """Called when the window is shown"""
         self.worker.activate_hardware()
         super().showEvent(event)
 
     def hideEvent(self, event):
-        """Called when window is hidden"""
+        """Called when the window is hidden"""
         self.worker.deactivate_hardware()
         super().hideEvent(event)
 
     def closeEvent(self, event):
-        # Just hide instead of close when the X is clicked
+        # Just hide instead of closing when the X is clicked
         if self.tray_icon.isVisible():
             self.hide_and_stop_listening()
             event.ignore()
